@@ -1,0 +1,272 @@
+---
+title: "Mobile Price Prediction"
+author: "Akash Shakya"
+date: "2024-06-15"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(caret)
+library(xgboost)
+library(e1071)
+library(corrplot)
+library(knitr)
+library(kableExtra)
+library(tidyr)
+
+
+```
+
+# Load the Dataset
+
+In this section, we load the dataset from a CSV file.
+
+```{r}
+print("Loading dataset")
+# Read the dataset
+mobile_data <- read.csv('Cellphone.csv')
+
+# Display the first few rows
+head(mobile_data)
+
+
+
+```
+
+# Data Exploration
+
+Next, we explore the dataset to understand its structure and characteristics.
+
+```{r}
+print("Exploring dataset")
+# Display the shape of the dataset
+dim(mobile_data)
+
+# Display descriptive statistics
+summary(mobile_data)
+
+# Display dataset structure
+str(mobile_data)
+
+# Check for missing values
+colSums(is.na(mobile_data))
+
+# Display column names
+colnames(mobile_data)
+
+# Display correlation with Price
+cor(mobile_data)[, "Price"] %>% sort()
+
+
+```
+
+# Data Visualization
+
+Here, we visualize the relationships between different features and the target variable, Price.
+
+## Scatter plots
+
+```{r}
+print("Visualizing data")
+# Plot Thickness vs Price
+ggplot(mobile_data, aes(x = thickness, y = Price)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(x = 'Thickness', y = 'Price') +
+  theme_minimal()
+
+# Plot RAM vs Price
+ggplot(mobile_data, aes(x = ram, y = Price)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(x = 'RAM', y = 'Price') +
+  theme_minimal()
+
+# Plot Internal Memory vs Price
+ggplot(mobile_data, aes(x = `internal.mem`, y = Price)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(x = 'Internal Memory', y = 'Price') +
+  theme_minimal()
+
+# Plot Rear Camera vs Price
+ggplot(mobile_data, aes(x = RearCam, y = Price)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(x = 'Rear Camera', y = 'Price') +
+  theme_minimal()
+
+# Plot CPU Core vs Price
+ggplot(mobile_data, aes(x = `cpu.core`, y = Price)) +
+  geom_point() +
+  geom_smooth(method = 'lm') +
+  labs(x = 'CPU Core', y = 'Price') +
+  theme_minimal()
+
+
+```
+
+## Histogram
+
+```{r}
+print("Visualizing data")
+# Histogram for RAM
+ggplot(mobile_data, aes(x = ram)) +
+  geom_histogram(fill = "skyblue", color = "black", bins = 20) +
+  labs(x = 'RAM', y = 'Frequency') +
+  theme_minimal()
+
+# Histogram for Internal Memory
+ggplot(mobile_data, aes(x = internal.mem)) +
+  geom_histogram(fill = "lightgreen", color = "black", bins = 20) +
+  labs(x = 'Internal Memory', y = 'Frequency') +
+  theme_minimal()
+
+# Histogram for Rear Camera
+ggplot(mobile_data, aes(x = RearCam)) +
+  geom_histogram(fill = "salmon", color = "black", bins = 20) +
+  labs(x = 'Rear Camera', y = 'Frequency') +
+  theme_minimal()
+
+# Histogram for CPU Core
+ggplot(mobile_data, aes(x = cpu.core)) +
+  geom_histogram(fill = "gold", color = "black", bins = 20) +
+  labs(x = 'CPU Core', y = 'Frequency') +
+  theme_minimal()
+
+
+```
+# Correlation Heatmap
+
+We create a heatmap to visualize the correlations between different features.
+
+```{r}
+print("Creating correlation heatmap")
+corr_matrix <- cor(mobile_data)
+
+# Enhanced visualization of the correlation matrix
+corrplot(corr_matrix, method = 'color', type = 'lower', 
+         tl.cex = 0.8, tl.col = 'black', addCoef.col = 'black',
+         number.cex = 0.7, # adjust the size of the correlation coefficients
+         col = colorRampPalette(c("red", "white", "blue"))(200)) # change color palette
+
+
+```
+
+# Prepare Data for Modeling
+
+We split the dataset into training and testing sets and standardize the features.
+
+```{r}
+print("Preparing data for modeling")
+X <- mobile_data %>% select(-Price)
+y <- mobile_data$Price
+
+# Split data into training and testing sets
+set.seed(7)
+trainIndex <- createDataPartition(y, p = 0.8, list = FALSE)
+X_train <- X[trainIndex,]
+X_test <- X[-trainIndex,]
+y_train <- y[trainIndex]
+y_test <- y[-trainIndex]
+
+# Standardize the data
+preProcValues <- preProcess(X_train, method = c("center", "scale"))
+X_train <- predict(preProcValues, X_train)
+X_test <- predict(preProcValues, X_test)
+
+
+```
+
+# Linear Regression Model
+
+We train a Linear Regression model and evaluate its performance.
+
+```{r}
+print("Training Linear Regression model")
+l_model <- train(X_train, y_train, method = 'lm')
+y_pred <- predict(l_model, X_test)
+
+# Model evaluation
+lm_metrics <- data.frame(
+  R2 = R2(y_pred, y_test),
+  MAE = MAE(y_pred, y_test),
+  MSE = mean((y_pred - y_test)^2),
+  RMSE = RMSE(y_pred, y_test)
+)
+
+print(lm_metrics)
+
+```
+
+# XGBoost Model
+
+We train an XGBoost model and evaluate its performance.
+
+```{r}
+print("Training XGBoost model")
+xgb_model <- train(X_train, y_train, method = 'xgbLinear')
+y_pred_xgb <- predict(xgb_model, X_test)
+
+# Model evaluation
+xgb_metrics <- data.frame(
+  R2 = R2(y_pred_xgb, y_test),
+  MAE = MAE(y_pred_xgb, y_test),
+  MSE = mean((y_pred_xgb - y_test)^2),
+  RMSE = RMSE(y_pred_xgb, y_test)
+)
+
+print(xgb_metrics)
+
+
+
+
+```
+
+# Decision Tree Model
+
+We train a Decision Tree model and evaluate its performance.
+
+```{r}
+print("Training Decision Tree model")
+dt_model <- train(X_train, y_train, method = 'rpart')
+y_pred_dt <- predict(dt_model, X_test)
+
+# Model evaluation
+dt_metrics <- data.frame(
+  R2 = R2(y_pred_dt, y_test),
+  MAE = MAE(y_pred_dt, y_test),
+  MSE = mean((y_pred_dt - y_test)^2),
+  RMSE = RMSE(y_pred_dt, y_test)
+)
+
+print(dt_metrics)
+
+
+
+```
+
+# Model Comparison
+```{r}
+# Create a table for model comparison
+models <- c("Linear Regression", "XGBoost", "Decision Tree")
+metrics_table <- data.frame(
+  Model = models,
+  R2 = c(lm_metrics$R2, xgb_metrics$R2, dt_metrics$R2),
+  MAE = c(lm_metrics$MAE, xgb_metrics$MAE, dt_metrics$MAE),
+  MSE = c(lm_metrics$MSE, xgb_metrics$MSE, dt_metrics$MSE),
+  RMSE = c(lm_metrics$RMSE, xgb_metrics$RMSE, dt_metrics$RMSE)
+)
+
+# Display the table using knitr::kable
+kable(metrics_table, format = "html", 
+      caption = "Comparison of Model Performance Metrics",
+      align = c("l", "c", "c", "c", "c")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed", "responsive"))
+
+
+```
